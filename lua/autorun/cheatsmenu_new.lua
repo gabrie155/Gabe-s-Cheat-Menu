@@ -29,17 +29,18 @@ hook.Add("PlayerInitialSpawn", "WelcomeMessage", function(ply)
     end
 end)
 	
-   -- Hook to handle one-shot entities (NPCs and Players)
-    hook.Add("EntityTakeDamage", "OneShotEntities", function(target, dmginfo)
-        if oneShotEntitiesConVar:GetBool() then
-            local attacker = dmginfo:GetAttacker()
-            local inflictor = dmginfo:GetInflictor()
+	   -- Hook to handle one-shot entities (NPCs and Players)
+	hook.Add("EntityTakeDamage", "OneShotEntities", function(target, dmginfo)
+		if oneShotEntitiesConVar:GetBool() then
+			local attacker = dmginfo:GetAttacker()
+			local inflictor = dmginfo:GetInflictor()
 
-            if IsValid(attacker) and attacker:IsPlayer() then
-                dmginfo:SetDamage(target:Health()) -- Set damage to entity's current health, effectively one-shotting them
-            end
-        end
-    end)
+			-- Check if the attacker is the listen server host
+			if IsValid(attacker) and attacker:IsPlayer() and attacker:IsListenServerHost() then
+				dmginfo:SetDamage(target:Health()) -- Set damage to entity's current health, effectively one-shotting them
+			end
+		end
+	end)
 	
 hook.Add("Think", "MakePlayerInvisible", function()
     for _, ply in pairs(player.GetAll()) do
@@ -331,10 +332,12 @@ end)
 
 -- Inside the SERVER section, modify the function to teleport all NPCs (including NextBots) to the player's crosshair
 function TeleportAllNPCs(ply)
+    if not ply:IsListenServerHost() then return end -- Only allow the server host to execute this command
+    
     local trace = ply:GetEyeTrace()
     local targetPos = trace.HitPos
 
-    for _, entity in pairs(ents.FindByClass("npc_*")) do
+    for _, entity in pairs(ents.GetAll()) do
         if IsValid(entity) and (entity:IsNPC() or entity:GetClass():find("nextbot")) and entity:Health() > 0 then
             entity:SetPos(targetPos)
         end
@@ -350,6 +353,8 @@ end)
 
 -- Inside the SERVER section, add a function to teleport all players to the player's crosshair
 function TeleportAllPlayers(ply)
+    if not ply:IsListenServerHost() then return end -- Only allow the server host to execute this command
+    
     local trace = ply:GetEyeTrace()
     local targetPos = trace.HitPos
 
@@ -469,9 +474,9 @@ end)
         end
     end)
 
- hook.Add("Think", "InfiniteAmmo", function() --infinite ammo works for rpg's grenades now!!!
+ hook.Add("Think", "InfiniteAmmo", function()
     for _, ply in pairs(player.GetAll()) do
-        if IsValid(ply) and ply:Alive() and infiniteAmmoConVar:GetBool() then
+        if IsValid(ply) and ply:IsListenServerHost() and ply:Alive() and infiniteAmmoConVar:GetBool() then
             for _, weapon in pairs(ply:GetWeapons()) do
                 if IsValid(weapon) then
                     -- Check if the weapon has primary ammo
@@ -523,6 +528,7 @@ local function DrawTraceLines()
         end
     end
 end
+
 
 -- Inside the HUDPaint hook
 hook.Add("HUDPaint", "RedBoxes", function()
@@ -684,7 +690,6 @@ end)
 		menuSettingsLabel:SizeToContents() -- Resize the label to fit the text
 		menuSettingsLabel:SetPos(menuSettingsPanel:GetWide() / 2 - menuSettingsLabel:GetWide() / 2, 575) -- Position the label at the top center of the panel
 
-
 		-- Add cheats to the aim section
 		local checkboxAimbot = vgui.Create("DCheckBoxLabel", aimPanel)
 		checkboxAimbot:SetText("Enable Aimbot")
@@ -815,6 +820,11 @@ end)
 		checkboxTeleportNPC:SetText("Enable Teleport NPCs to Crosshair")
 		checkboxTeleportNPC:SetConVar("cheat_teleport_npc_enabled")
 		checkboxTeleportNPC:Dock(TOP)
+		
+	    local checkboxTeleportPlayer = vgui.Create("DCheckBoxLabel", otherPanel)
+		checkboxTeleportPlayer:SetText("Enable Teleport Players to Crosshair")
+		checkboxTeleportPlayer:SetConVar("cheat_teleport_players_enabled")
+		checkboxTeleportPlayer:Dock(TOP)
 		
 		local spinAngleSlider = vgui.Create("DNumSlider", otherPanel)
 		spinAngleSlider:SetText("Spinbot Speed")
