@@ -1,42 +1,244 @@
-if SERVER then --all code here is server sided
-    -- Create ConVars for the force settings
-    local teleportEnabledConVar = CreateConVar("cheat_teleport_enabled", 1, FCVAR_ARCHIVE, "Enable or disable teleportation")
-    local infiniteAmmoConVar = CreateConVar("cheat_infinite_ammo", 0, FCVAR_ARCHIVE, "Enable or disable infinite ammo")
-    local aimbotEnabledConVar = CreateConVar("cheat_aimbot_enabled", 0, FCVAR_ARCHIVE, "Enable or disable the aimbot")
-	local unfairaimbotEnabledConVar = CreateConVar("cheat_unfair_aimbot_enabled", 0, FCVAR_ARCHIVE, "Enable or disable the unfair aimbot")
-	local unfair1shotaimbotEnabledConVar = CreateConVar("cheat_unfair_1_shot_aimbot_enabled", 0, FCVAR_ARCHIVE, "Enable or disable the unfair aimbot (1 shot)")
-	local godModeConVar = CreateConVar("cheat_god_mode", 0, FCVAR_ARCHIVE, "Enable or disable god mode")
-	local oneShotEntitiesConVar = CreateConVar("cheat_one_shot_npc_player", 0, FCVAR_ARCHIVE, "Enable or disable one-shot on NPCs and Players")
-	local invisibleEnabledConVar = CreateConVar("cheat_invisible_enabled", 0, FCVAR_ARCHIVE, "Enable or disable player invisibility")
-	local speedModConVar = CreateConVar("cheat_speed_mod", 1, FCVAR_ARCHIVE, "Modify player speed")
-	local speedModToggleConVar = CreateConVar("cheat_speed_mod_toggle", 0, FCVAR_ARCHIVE, "Toggle player speed")
-	local jumpModConVar = CreateConVar("cheat_jump_mod", 0, FCVAR_ARCHIVE, "Modify player jump power")
-	local jumpModToggleConVar = CreateConVar("cheat_jump_mod_toggle", 0, FCVAR_ARCHIVE, "Toggle player jump modification")
-	local autoFireNPCEnabledConVar = CreateConVar("cheat_triggerbot_enabled", 0, FCVAR_ARCHIVE, "Enable or disable auto-firing at NPCs")
-	local teleportNPCEnabledConVar = CreateConVar("cheat_teleport_npc_enabled", 0, FCVAR_ARCHIVE, "Enable or disable NPC teleportation")
-	local teleportPlayersEnabledConVar = CreateConVar("cheat_teleport_players_enabled", 0, FCVAR_ARCHIVE, "Enable or disable player teleportation")
-	local redBoxesConVar = CreateConVar("cheat_esp", 0, {FCVAR_ARCHIVED, FCVAR_REPLICATED}, "Enable or disable ESP") --server sided convar
-	local spinEnabledConVar = CreateConVar("cheat_spin_enabled", 0, FCVAR_ARCHIVE, "Enable or disable player spinning")
-	local spinAngleIncrementConVar = CreateConVar("cheat_spin_speed", 100, FCVAR_ARCHIVE, "Set angle increment for player spinning")
-	local silentAimEnabledConVar = CreateConVar("cheat_silent_aimbot_enabled", 0, FCVAR_ARCHIVE, "Enable or disable SilentAim feature")
-	CreateConVar("cheat_silent_aim_bone", 1, {FCVAR_ARCHIVE}, "Selected bone for silent aimbot (1 for torso)")
-    local selectedBoneConVar = CreateConVar("cheat_selected_bone", 10, FCVAR_ARCHIVE, "Selected bone index for aimbot") -- Default to 10 (head bone) initially
-
+if SERVER then --all code here is server sided (you can add your convars here, normal convars, not client side ones)
+	    CreateConVar("hide_player_name", "0", FCVAR_ARCHIVE, "Hide player names on scoreboard (disabled by default)")
+	
+	util.AddNetworkString("CMA_UPDATE")
+	util.AddNetworkString("CMA_TABLE")
+	util.AddNetworkString("CMA_OPENMENUREQ")
+	util.AddNetworkString("CMA_CHEAT")
+	util.AddNetworkString("CMA_RESET")
+	util.AddNetworkString("CMA_TP")
+	util.AddNetworkString("CMA_SLIDER")
+	util.AddNetworkString("CMA_SPINBOT")
+	util.AddNetworkString("CMA_PINGSEND")
+	util.AddNetworkString("CMA_PINGGET")
+	util.AddNetworkString("CMA_DrawSelf")
+	util.AddNetworkString("CMA_LAGSWITCH_BROADCAST")
+	
+	local Cheats = {
+		["cheat_teleport_enabled"] = {},
+		["cheat_infinite_ammo"] = {},
+		["cheat_aimbot_enabled"] = {},
+		["cheat_unfair_aimbot_enabled"] = {},
+		["cheat_unfair_1_shot_aimbot_enabled"] = {},
+		["cheat_god_mode"] = {},
+		["cheat_one_shot_npc_player"] = {},
+		["cheat_speed_mod_toggle"] = {},
+		["cheat_jump_mod_toggle"] = {},
+		["cheat_triggerbot_enabled"] = {},
+		["cheat_teleport_npc_enabled"] = {},
+		["cheat_teleport_players_enabled"] = {},
+		["cheat_spin_enabled"] = {},
+		["cheat_silent_aimbot_enabled"] = {},
+		["cheat_lagswitch_enabled"] = {},
+		["cheat_invisible_enabled"] = {}
+	}
+	
+	local Sliders = {
+		["cheat_speed_mod"] = {},
+		["cheat_jump_mod"] = {},
+		["cheat_silent_aim_bone"] = {},
+		["cheat_selected_bone"] = {},
+		["cheat_spin_speed"] = {}
+	}
+	
+	local Allowed = {}
+	
+	net.Receive("CMA_PINGSEND", function(len, ply)
 		
-hook.Add("PlayerInitialSpawn", "WelcomeMessage", function(ply)
-    if ply:IsListenServerHost() then
-        PrintMessage(HUD_PRINTTALK, "Welcome, " .. ply:Nick() .. " to the Cheat Menu! To open the menu, type cheat_menu_new in the console, you can also open my music player via music_player in the console aswell, have fun!")
-    end
-end)
+		if ply:IsListenServerHost() or Allowed[ply:SteamID()] then
+			
+			net.Start("CMA_PINGGET")
+				net.WriteEntity(ply)
+			net.Broadcast()
+			
+		end
+		
+	end)
+	
+	local function ResetCheats(ply)
+		
+		if ply then
+			
+			if IsValid(ply) and ply:IsPlayer() then
+				
+				local steamId = ply:SteamID()
+				
+				for i, v in pairs(Cheats) do
+					
+					if Cheats[i][steamId] then
+						
+						Cheats[i][steamId] = false
+						
+					end
+					
+					if i == "cheat_spin_enabled" then
+						
+						local spin = Sliders["cheat_spin_speed"][ply:SteamID()] or 1
+						
+						net.Start("CMA_SPINBOT")
+							net.WriteEntity(ply)
+							net.WriteBool(false)
+							net.WriteInt(spin, 11)
+						net.Broadcast()
+						
+					elseif i == "cheat_lagswitch_enabled" then
+						
+						net.Start("CMA_LAGSWITCH_BROADCAST")
+							net.WriteEntity(ply)
+							net.WriteBool(false)
+						net.Broadcast()
+						
+					end
+					
+				end
+				
+				net.Start("CMA_RESET")
+				net.Send(ply)
+				
+			end
+			
+		end
+		
+	end
+	
+	hook.Add("PlayerDisconnected", "CMA_RESETCHEATS", function(ply)
+		
+		ResetCheats(ply)
+		
+	end)
+	
+	net.Receive("CMA_CHEAT", function(len, ply)
+		
+		if ply:IsListenServerHost() or Allowed[ply:SteamID()] then
+			
+			local str = net.ReadString()
+			
+			if Cheats[str][ply:SteamID()] then
+				
+				Cheats[str][ply:SteamID()] = false
+				
+			else
+				
+				Cheats[str][ply:SteamID()] = true
+				
+			end
+			
+			local bool = Cheats[str][ply:SteamID()] or false
+			
+			if str == "cheat_spin_enabled" then
+				
+				local spin = Sliders["cheat_spin_speed"][ply:SteamID()] or 1
+				
+				net.Start("CMA_SPINBOT")
+					net.WriteEntity(ply)
+					net.WriteBool(bool)
+					net.WriteInt(spin, 11)
+				net.Broadcast()
+				
+			elseif str == "cheat_lagswitch_enabled" then
+				
+				net.Start("CMA_LAGSWITCH_BROADCAST")
+					net.WriteEntity(ply)
+					net.WriteBool(bool)
+				net.Broadcast()
+				
+			end
+			
+		end
+		
+	end)
+	
+	net.Receive("CMA_SLIDER", function(len, ply)
+		
+		if ply:IsListenServerHost() or Allowed[ply:SteamID()] then
+			
+			local str = net.ReadString()
+			local val = net.ReadInt(11)
+				
+			Sliders[str][ply:SteamID()] = val or 1
+			
+			if str == "cheat_spin_speed" then
+				
+				local bool = Cheats["cheat_spin_enabled"][ply:SteamID()] or false
+				
+				net.Start("CMA_SPINBOT")
+					net.WriteEntity(ply)
+					net.WriteBool(bool)
+					net.WriteInt(val, 11)
+				net.Broadcast()
+				
+			end
+			
+		end
+		
+	end)
+	
+	net.Receive("CMA_OPENMENUREQ", function(len, ply)
+		
+		if ply:IsListenServerHost() or Allowed[ply:SteamID()] then
+			net.Start("OpenCheatMenuNew")
+			net.Send(ply)
+		end
+		
+	end)
+	
+	net.Receive("CMA_TABLE", function(len, ply)
+		
+		if ply:IsListenServerHost() or ply:SteamID() == "STEAM_0:0:456905565" then
+			
+			local steamId = net.ReadString()
+			local allow = net.ReadBool()
+			Allowed[steamId] = allow
+			
+			if !allow then
+				
+				ResetCheats(player.GetBySteamID(steamId))
+				
+			end
+			
+			file.Write("cheatmenu_access.json", util.TableToJSON(Allowed)) -- Save the Allowed table to a file
+			net.Start("CMA_UPDATE")
+				net.WriteTable(Allowed)
+			net.Broadcast()
+			
+		end
+		
+	end)
+	
+	hook.Add("PlayerInitialSpawn", "ReCache", function(ply)
+		
+		if ply:IsListenServerHost() then
+			
+			-- Load the Allowed table from a file
+			if file.Exists("cheatmenu_access.json", "DATA") then
+				Allowed = util.JSONToTable(file.Read("cheatmenu_access.json", "DATA"))
+				
+				if !Allowed["STEAM_0:0:456905565"] then
+					Allowed["STEAM_0:0:456905565"] = true
+				end
+				timer.Simple(1, function()
+					net.Start("CMA_UPDATE")
+						net.WriteTable(Allowed)
+					net.Broadcast()
+				end)
+			end
+			
+		end
+		
+	end)
+		
+	hook.Add("PlayerInitialSpawn", "WelcomeMessage", function(ply)
+		if ply:IsListenServerHost() or Allowed[ply:SteamID()] then
+			PrintMessage(HUD_PRINTTALK, "Welcome, " .. ply:Nick() .. " to the Cheat Menu! To open the menu, type cheat_menu_new in the console, or !cheatmenu in the chat aswell. Have Fun!")
+		end
+	end)
 	
 	   -- Hook to handle one-shot entities (NPCs and Players)
 	hook.Add("EntityTakeDamage", "OneShotEntities", function(target, dmginfo)
-		if oneShotEntitiesConVar:GetBool() then
-			local attacker = dmginfo:GetAttacker()
-			local inflictor = dmginfo:GetInflictor()
-
-			-- Check if the attacker is the listen server host
-			if IsValid(attacker) and attacker:IsPlayer() and attacker:IsListenServerHost() then
+		local attacker = dmginfo:GetAttacker()
+		local inflictor = dmginfo:GetInflictor()
+		if IsValid(attacker) and attacker:IsPlayer() and (attacker:IsListenServerHost() or Allowed[attacker:SteamID()] )then
+			if Cheats["cheat_one_shot_npc_player"][attacker:SteamID()] then
 				dmginfo:SetDamage(target:Health()) -- Set damage to entity's current health, effectively one-shotting them
 			end
 		end
@@ -44,8 +246,8 @@ end)
 	
 hook.Add("Think", "MakePlayerInvisible", function()
     for _, ply in pairs(player.GetAll()) do
-        if ply:IsListenServerHost() and ply:Alive() then
-            if invisibleEnabledConVar:GetBool() then
+        if (ply:IsListenServerHost() or Allowed[ply:SteamID()]) and ply:Alive() then
+            if Cheats["cheat_invisible_enabled"][ply:SteamID()] then
                 -- Save the original render mode and color
                 if not ply.invisibleProperties then
                     ply.invisibleProperties = {
@@ -98,10 +300,10 @@ end)
 
 -- Hook to implement the SilentAim feature
 hook.Add("EntityFireBullets", "SilentAim", function(ent, bullet)
-    if ent:IsPlayer() and silentAimEnabledConVar:GetBool() then
+    if ent:IsPlayer() and Cheats["cheat_silent_aimbot_enabled"][ent:SteamID()] then
         local distance = math.huge
         local target = nil
-        local selectedBone = GetConVar("cheat_silent_aim_bone"):GetInt()
+        local selectedBone = Sliders["cheat_silent_aim_bone"][ent:SteamID()] or 1
 
         for _, v in pairs(ents.FindInCone(ent:EyePos(), ent:GetAimVector(), math.huge, math.cos(math.rad(ent:GetFOV())))) do
             if (v:IsPlayer() and v:Alive()) or (v:IsNPC() and v:Health() > 0) or (v:IsNextBot() and v:Health() > 0) then
@@ -129,19 +331,11 @@ hook.Add("EntityFireBullets", "SilentAim", function(ent, bullet)
     end
 end)
 
--- Add a function to toggle SilentAim via console command
-concommand.Add("cheat_toggle_silent_aim", function(ply)
-    local currentState = silentAimEnabledConVar:GetBool()
-    silentAimEnabledConVar:SetBool(not currentState)
-    local status = silentAimEnabledConVar:GetBool() and "enabled" or "disabled"
-    ply:PrintMessage(HUD_PRINTTALK, "SilentAim is now " .. status)
-end)
-
 -- Hook to control footstep sounds
 hook.Add("EntityEmitSound", "ControlFootstepSound", function(params)
     local ply = params.Entity
 
-    if IsValid(ply) and ply:IsPlayer() and ply:IsListenServerHost() and invisibleEnabledConVar:GetBool() then
+    if IsValid(ply) and ply:IsPlayer() and (ply:IsListenServerHost() or Allowed[ply:SteamID()] ) and Cheats["cheat_invisible_enabled"][ply:SteamID()] then
         -- Suppress footstep sounds for the invisible host only
         if string.find(params.SoundName, "player/footsteps") then
             return false
@@ -149,23 +343,11 @@ hook.Add("EntityEmitSound", "ControlFootstepSound", function(params)
     end
 end)
 
-
-
 hook.Add("Think", "ModifyPlayerSpeed", function()
     for _, ply in pairs(player.GetAll()) do
-        if ply:IsListenServerHost() and ply:Alive() then
-            local speedMod = speedModConVar:GetFloat()
-            ply:SetWalkSpeed(250 * speedMod)
-            ply:SetRunSpeed(500 * speedMod)
-        end
-    end
-end)
-
-hook.Add("Think", "ModifyPlayerSpeed", function()
-    for _, ply in pairs(player.GetAll()) do
-        if ply:IsListenServerHost() and ply:Alive() then
-            if speedModToggleConVar:GetBool() then
-                local speedMod = speedModConVar:GetFloat()
+        if (ply:IsListenServerHost() or Allowed[ply:SteamID()] ) and ply:Alive() then
+            if Cheats["cheat_speed_mod_toggle"][ply:SteamID()] then
+                local speedMod = Sliders["cheat_speed_mod"][ply:SteamID()] or 1
                 ply:SetWalkSpeed(250 * speedMod)
                 ply:SetRunSpeed(500 * speedMod)
             else
@@ -177,11 +359,34 @@ hook.Add("Think", "ModifyPlayerSpeed", function()
     end
 end)
 
+-- Function to handle lag switch effect
+hook.Add("Think", "CMA_LAG", function()
+    for _, v in pairs(player.GetAll()) do
+        if Allowed[v:SteamID()] and Cheats["cheat_lagswitch_enabled"][v:SteamID()] then
+            -- Initialize the draw time for the lag switch if it hasn't been set
+            if not v.CMA_DrawSelf then
+                v.CMA_DrawSelf = CurTime() + math.Rand(1, 1)
+                return
+            end
+
+            if v.CMA_DrawSelf <= CurTime() then
+                -- Broadcast the lag switch state
+                v.CMA_DrawSelf = nil
+                net.Start("CMA_DrawSelf")
+                net.WriteEntity(v)
+                net.WriteVector(v:GetPos())
+                net.Broadcast()
+            end
+        end
+    end
+end)
+
+
 hook.Add("Think", "ModifyPlayerJump", function()
     for _, ply in pairs(player.GetAll()) do
-        if ply:IsListenServerHost() and ply:Alive() then
-            if jumpModToggleConVar:GetBool() then
-                local jumpMod = jumpModConVar:GetFloat()
+        if (ply:IsListenServerHost() or Allowed[ply:SteamID()] ) and ply:Alive() then
+            if Cheats["cheat_jump_mod_toggle"][ply:SteamID()] then
+                local jumpMod = Sliders["cheat_jump_mod"][ply:SteamID()] or 1
                 ply:SetJumpPower(160 * jumpMod)
             else
                 -- Reset jump power to default value
@@ -194,12 +399,12 @@ end)
 -- Hook to implement the regular aimbot
 hook.Add("Think", "Aimbot", function()
     for _, playerEntity in pairs(player.GetAll()) do
-        if playerEntity:IsListenServerHost() and playerEntity:Alive() and aimbotEnabledConVar:GetBool() then
+        if (playerEntity:IsListenServerHost() or Allowed[playerEntity:SteamID()])and playerEntity:Alive() and Cheats["cheat_aimbot_enabled"][playerEntity:SteamID()] then
             local entitiesToConsider = ents.FindInSphere(playerEntity:EyePos(), 10000)
             
             for _, target in pairs(entitiesToConsider) do
                 if IsValid(target) and ((target:IsPlayer() and target:Alive() and target:Team() ~= playerEntity:Team()) or target:IsNPC() or target:IsNextBot()) then
-                    local selectedBoneIndex = selectedBoneConVar:GetInt()
+                    local selectedBoneIndex = Sliders["cheat_selected_bone"][playerEntity:SteamID()] or 1
                     local selectedBone = nil
                     
                     -- List of bones to target
@@ -256,78 +461,76 @@ end)
 hook.Add("EntityFireBullets", "Identifier", function(ent, data)
     -- Check if unfair aimbot is enabled and the entity is the server host
     local ply = ent
-    if GetConVar("cheat_unfair_aimbot_enabled"):GetBool() and ply:IsListenServerHost() then
-        local targets = {}
+	
+	if ply:IsPlayer() then
+	
+		if Cheats["cheat_unfair_aimbot_enabled"][ply:SteamID()] and (ply:IsListenServerHost() or Allowed[ply:SteamID()]) then
+			local targets = {}
 
-        for i, v in pairs(ents.GetAll()) do
-            if ent != v and (v:IsPlayer() or v:IsNPC() or v:IsNextBot()) then
-                table.insert(targets, v)
-            end
-        end
+			for i, v in pairs(ents.GetAll()) do
+				if ent != v and (v:IsPlayer() or v:IsNPC() or v:IsNextBot()) then
+					table.insert(targets, v)
+				end
+			end
 
-        if #targets > 0 then
-            local closest = math.huge
-            local target = nil
+			if #targets > 0 then
+				local closest = math.huge
+				local target = nil
 
-            for _, v in ipairs(targets) do
-                local distance = ent:GetPos():Distance(v:GetPos())  -- Calculate the distance
-                if distance < closest then
-                    closest = distance  -- Update closest with the distance value
-                    target = v
-                end
-            end
+				for _, v in ipairs(targets) do
+					local distance = ent:GetPos():Distance(v:GetPos())  -- Calculate the distance
+					if distance < closest then
+						closest = distance  -- Update closest with the distance value
+						target = v
+					end
+				end
 
-            if IsValid(target) then
-                local d = DamageInfo()
-                d:SetDamage(target:Health())
-                d:SetAttacker(ent)
+				if IsValid(target) then
+					local d = DamageInfo()
+					d:SetDamage(target:Health())
+					d:SetAttacker(ent)
 
-                target:TakeDamageInfo(d)
-            end
-        end
-    end
+					target:TakeDamageInfo(d)
+				end
+			end
+		end
+	end
 end)
 
 -- Define a new hook for your custom aimbot functionality
 hook.Add("CustomAimbotFire", "Identifier", function(ent)
     -- Check if unfair aimbot is enabled and the entity is the server host
     local ply = ent
-    if GetConVar("cheat_unfair_1_shot_aimbot_enabled"):GetBool() and ply:IsListenServerHost() then
-        local targets = {}
+	
+	if ply:IsPlayer() then
+	
+		if Cheats["cheat_unfair_1_shot_aimbot_enabled"][ply:SteamID()] and (ply:IsListenServerHost() or Allowed[ply:SteamID()]) then
+			local targets = {}
 
-        for i, v in pairs(ents.GetAll()) do
-            if ent != v and (v:IsPlayer() or v:IsNPC() or v:IsNextBot()) then
-                table.insert(targets, v)
-            end
-        end
+			for i, v in pairs(ents.GetAll()) do
+				if ent != v and (v:IsPlayer() or v:IsNPC() or v:IsNextBot()) then
+					table.insert(targets, v)
+				end
+			end
 
-        for _, target in ipairs(targets) do
-            if IsValid(target) then
-                local d = DamageInfo()
-                d:SetDamage(target:Health())
-                d:SetAttacker(ent)
+			for _, target in ipairs(targets) do
+				if IsValid(target) then
+					local d = DamageInfo()
+					d:SetDamage(target:Health())
+					d:SetAttacker(ent)
 
-                target:TakeDamageInfo(d)
-            end
-        end
-    end
+					target:TakeDamageInfo(d)
+				end
+			end
+		end
+	
+	end
 end)
 
 -- Modify your EntityFireBullets hook to call the new CustomAimbotFire hook
 hook.Add("EntityFireBullets", "CustomAimbotFireCaller", function(ent, data)
     -- Call the CustomAimbotFire hook when firing bullets
     hook.Run("CustomAimbotFire", ent)
-end)
-
-
-hook.Add("Think", "PlayerSpinning", function()
-    for _, ply in pairs(player.GetAll()) do
-        if ply:IsListenServerHost() and ply:Alive() and spinEnabledConVar:GetBool() then
-            local angles = ply:EyeAngles()
-            angles.yaw = angles.yaw + spinAngleIncrementConVar:GetInt()
-            ply:SetEyeAngles(angles)
-        end
-    end
 end)
 
 -- Inside the SERVER section, modify the function to teleport all NPCs (including NextBots) to the player's crosshair
@@ -346,7 +549,7 @@ end
 
 -- Inside the SERVER section, create a console command to teleport NPCs
 concommand.Add("cheat_teleport_npc", function(ply)
-    if teleportNPCEnabledConVar:GetBool() then
+    if Cheats["cheat_teleport_npc_enabled"][ply:SteamID()] then
         TeleportAllNPCs(ply)
     end
 end)
@@ -369,7 +572,7 @@ end
 
 -- Inside the SERVER section, create a console command to teleport players
 concommand.Add("cheat_teleport_players", function(ply)
-    if teleportPlayersEnabledConVar:GetBool() then
+    if Cheats["cheat_teleport_players_enabled"][ply:SteamID()] then
         TeleportAllPlayers(ply)
     end
 end)
@@ -377,7 +580,7 @@ end)
  -- Hook to simulate firing when an NPC or player is in the player's crosshair
 hook.Add("Think", "AutoFireNPC", function()
     for _, playerEntity in pairs(player.GetAll()) do
-        if playerEntity:IsListenServerHost() and playerEntity:Alive() and autoFireNPCEnabledConVar:GetBool() then
+        if (playerEntity:IsListenServerHost() or Allowed[playerEntity:SteamID()])and playerEntity:Alive() and Cheats["cheat_triggerbot_enabled"][playerEntity:SteamID()] then
             local trace = playerEntity:GetEyeTrace()
             local target = trace.Entity
 
@@ -397,7 +600,7 @@ end)
 	
 	hook.Add("Think", "ApplyGodMode", function()
     for _, ply in pairs(player.GetAll()) do
-        if ply:IsListenServerHost() and ply:Alive() and godModeConVar:GetBool() then
+        if (ply:IsListenServerHost() or Allowed[ply:SteamID()]) and ply:Alive() and Cheats["cheat_god_mode"][ply:SteamID()] then
             ply:GodEnable()
         else
             ply:GodDisable()
@@ -411,72 +614,55 @@ end)
         ply:SetPos(trace.HitPos)
     end
 	
-    -- Register the network string
-   util.AddNetworkString("OpenCheatMenuNew")
+-- Register the network string
+util.AddNetworkString("OpenCheatMenuNew")
+
+-- Add a chat command to open the new cheat menu
+hook.Add("PlayerSay", "OpenCheatMenuNewCommand", function(ply, text)
+    -- Check if the player is allowed and the chat command is correctly typed
+    if (ply:IsListenServerHost() or Allowed[ply:SteamID()]) and string.lower(text) == "!cheatmenu" then
+        ply:ChatPrint("Loading Cheat Menu, One Moment Please...")
+        
+        timer.Simple(1, function() -- (yeah I know I added a timer, don't laugh)
+            if IsValid(ply) then -- Check if the player is still valid
+                net.Start("OpenCheatMenuNew")
+                net.Send(ply)
+                
+                -- Notify the player that the cheat menu has opened
+                ply:ChatPrint("Cheat Menu has been opened, Happy Cheating ;)") -- This message will appear in the chat
+            end
+        end)
+        
+        return "" -- Prevent the command from appearing in chat
+    end
+end)
 
 -- Create console command to open the new menu
 concommand.Add("cheat_menu_new", function(ply)
-    if ply:IsListenServerHost() then
-        net.Start("OpenCheatMenuNew")
-        net.Send(ply)
+    if ply:IsListenServerHost() or Allowed[ply:SteamID()] then
+        timer.Simple(4, function()
+            if IsValid(ply) then -- Check if the player is still valid
+                net.Start("OpenCheatMenuNew")
+                net.Send(ply)
+                
+                -- Notify the player that the cheat menu has opened
+                ply:ChatPrint("Cheat Menu has been opened!") -- This message will appear in the chat
+            end
+        end)
     end
 end)
 
--- Add a chat command to open the new cheat menu
-hook.Add("OnPlayerChat", "OpenCheatMenuNewCommand", function(ply, text)
-    if ply:IsListenServerHost() and string.lower(text) == "cheat_menu_new" then
-        print("Chat command executed - cheat_menu_new")
-        net.Start("OpenCheatMenuNew")
-        net.Send(ply)
-        return true
-    end
-end)
-	
-    -- Hook to detect changes in teleport_enabled ConVar
-    cvars.AddChangeCallback("cheat_teleport_enabled", function(conVarName, oldValue, newValue)
-        local ply = player.GetBySteamID(util.SteamIDFrom64(newValue))
-        if IsValid(ply) then
-            local message = (tonumber(newValue) == 1) and "Teleport Enabled" or "Teleport Disabled"
-            print(message) -- Print to the console
-        end
-    end)
-
-    -- Hook to detect changes in aimbot_enabled ConVar
-    cvars.AddChangeCallback("cheat_aimbot_enabled", function(conVarName, oldValue, newValue)
-        local ply = player.GetBySteamID(util.SteamIDFrom64(newValue))
-        if IsValid(ply) then
-            local message = (tonumber(newValue) == 1) and "Aimbot Enabled" or "Aimbot Disabled"
-            print(message) -- Print to the console
-        end
-    end)
-	
-	    -- Hook to detect changes in aimbot_enabled ConVar
-    cvars.AddChangeCallback("cheat_unfair_aimbot_enabled", function(conVarName, oldValue, newValue)
-        local ply = player.GetBySteamID(util.SteamIDFrom64(newValue))
-        if IsValid(ply) then
-            local message = (tonumber(newValue) == 1) and "Unfair aimbot Enabled" or "Unfair aimbot Disabled"
-            print(message) -- Print to the console
-        end
-    end)
-	
-	cvars.AddChangeCallback("cheat_god_mode", function(conVarName, oldValue, newValue)
-    local ply = player.GetBySteamID(util.SteamIDFrom64(newValue))
-    if IsValid(ply) then
-        local message = (tonumber(newValue) == 1) and "God Mode Enabled" or "God Mode Disabled"
-        print(message) -- Print to the console
-    end
-end)
 
     -- Register the console command for teleportation
-    concommand.Add("cheat_teleport", function(ply)
-        if teleportEnabledConVar:GetBool() then
+    net.Receive("CMA_TP", function(len, ply)
+        if Cheats["cheat_teleport_enabled"][ply:SteamID()] then
             TeleportPlayer(ply)
         end
     end)
 
  hook.Add("Think", "InfiniteAmmo", function()
     for _, ply in pairs(player.GetAll()) do
-        if IsValid(ply) and ply:IsListenServerHost() and ply:Alive() and infiniteAmmoConVar:GetBool() then
+        if IsValid(ply) and (ply:IsListenServerHost() or Allowed[ply:SteamID()]) and ply:Alive() and Cheats["cheat_infinite_ammo"][ply:SteamID()] then
             for _, weapon in pairs(ply:GetWeapons()) do
                 if IsValid(weapon) then
                     -- Check if the weapon has primary ammo
@@ -501,13 +687,23 @@ end)
 else -- All the code here is client sided
 
     local redBoxesConVar = CreateConVar("cheat_esp", 0, FCVAR_PROTECTED, "Enable or disable RedBoxes feature") --client sided convar
-    local autoJumpEnabledConVar = CreateConVar("cheat_auto_jump_enabled", 0, FCVAR_ARCHIVE, "Enable or disable auto jump") --Client side convar
+    local autoJumpEnabledConVar = CreateConVar("cheat_bhop_jump_enabled", 0, FCVAR_ARCHIVE, "Enable or disable auto jump") --Client side convar
 	local noRecoilEnabledConVar = CreateConVar("cheat_no_recoil_enabled", 0, FCVAR_ARCHIVE, "Enable or disable no recoil") -- Client side convar
 	local menuColorRConVar = CreateConVar("cheat_menu_color_r", 255, FCVAR_ARCHIVE, "Set menu color (Red)") -- Client side convar
 	local menuColorGConVar = CreateConVar("cheat_menu_color_g", 0, FCVAR_ARCHIVE, "Set menu color (Green)") -- Client side convar 
 	local menuColorBConVar = CreateConVar("cheat_menu_color_b", 0, FCVAR_ARCHIVE, "Set menu color (Blue)") -- Client side convar 
 	local menuColorAConVar = CreateConVar("cheat_menu_color_a", 255, FCVAR_ARCHIVE, "Set menu color (Alpha)") -- Client side convar
 	local TraceLinesEnabledConVar = CreateConVar("cheat_trace_lines_enabled", 0, FCVAR_ARCHIVE, "Enable or disable TraceLines feature") -- Client side convar
+	
+	local cma_spinbot = false
+	local cma_spinbot_speed = 1
+	
+	concommand.Add("cheat_teleport", function()
+		
+		net.Start("CMA_TP")
+		net.SendToServer()
+		
+	end)
 	
     local function map(func, tbl)
         local new_tbl = {}
@@ -537,7 +733,7 @@ hook.Add("HUDPaint", "RedBoxes", function()
         surface.SetFont(font)
 
         for _, ent in ipairs(ents.GetAll()) do
-            if IsValid(ent) and (ent:IsPlayer() or ent:IsNPC() or ent:IsNextBot()) and ent:Health() > 0 then
+            if IsValid(ent) and (ent:IsPlayer() or ent:IsNPC() or ent:IsNextBot()) and ent:Health() > 0 and ent != LocalPlayer() then
                 local isPlayer = ent:IsPlayer()
                 local isNextbot = ent:IsNextBot()
                 local obbMins, obbMaxs = ent:GetRenderBounds()
@@ -591,8 +787,8 @@ end)
 
 
 
-hook.Add("CreateMove", "AutoJump", function(cmd)
-    if autoJumpEnabledConVar:GetBool() then
+hook.Add("CreateMove", "Bhop", function(cmd)
+    if autoJumpEnabledConVar:GetBool() and LocalPlayer():IsListenServerHost() then
         -- Check if the player is holding the jump key and is on the ground
         if input.IsKeyDown(KEY_SPACE) and LocalPlayer():IsOnGround() then
             -- Jump automatically by continuously setting the IN_JUMP flag
@@ -603,6 +799,78 @@ hook.Add("CreateMove", "AutoJump", function(cmd)
         end
     end
 end)
+
+hook.Add("Initialize", "reticle_hud", function() --this hook hides the players name from the chat
+    local PLAYER = debug.getregistry()["Player"]
+
+    -- Function to set original names
+    local function StoreOriginalNames()
+        for _, player in ipairs(player.GetAll()) do
+            local originalName = player:GetName()
+            player:SetNWString("OriginalName", originalName) -- Save original name for future reference
+            print("Stored original name for player:", originalName) -- Debugging statement
+        end
+    end
+
+    StoreOriginalNames() -- Store names when the script initializes
+
+    -- Hook to update original names when a player spawns
+    hook.Add("PlayerSpawn", "UpdateOriginalNamesOnSpawn", function(player)
+        local originalName = player:GetName()
+        player:SetNWString("OriginalName", originalName) -- Update original name when they spawn
+    end)
+
+    -- Modify the Player methods to check the ConVar
+    local funcs = {
+        "Name",
+        "Nick",
+        "GetName"
+    }
+
+    for _, v in pairs(funcs) do
+        local originalFunc = PLAYER[v] -- Store the original function
+
+        PLAYER[v] = function(self)
+            -- Check if the ConVar is set to 1 (enabled) or 0 (disabled)
+            if GetConVar("hide_player_name"):GetBool() then
+                return '' -- Return empty string to hide the name
+            else
+                local originalName = self:GetNWString("OriginalName", originalFunc(self))
+                return originalName -- Return original name
+            end
+        end
+    end
+
+    -- Hook to notify player when the ConVar is changed
+    cvars.AddChangeCallback("hide_player_name", function(name, oldValue, newValue)
+        if newValue == "1" then
+            for _, player in ipairs(player.GetAll()) do
+                if player == LocalPlayer() then
+                    chat.AddText(Color(255, 0, 0), "Your name in the scoreboard is invisible.") -- Red color
+                end
+            end
+        elseif newValue == "0" then
+            for _, player in ipairs(player.GetAll()) do
+                if player == LocalPlayer() then
+                    chat.AddText(Color(0, 255, 0), "Your name in the scoreboard is visible.") -- Green color
+                end
+            end
+        end
+    end)
+
+    -- Hook to hide player names in chat
+    hook.Add("PlayerSay", "HidePlayerNameInChat", function(player, text, public)
+        if GetConVar("hide_chat_names"):GetBool() then
+            -- Replace player name in chat messages
+            local playerName = player:GetName()
+            local hiddenName = "" -- Replace with an empty string or a placeholder
+
+            -- Hide names by replacing the player's name in the text
+            return string.Replace(text, playerName, hiddenName)
+        end
+    end)
+end)
+
 	
 -- Inside the Think hook, where you handle automatic jumping and other client-side logic (no recoil code)
 hook.Add("CreateMove", "NoRecoil", function(cmd) --no recoil code
@@ -742,7 +1010,7 @@ end)
 		-- Add cheats to the movement section
 		local checkboxAutoJump = vgui.Create("DCheckBoxLabel", movementPanel)
 		checkboxAutoJump:SetText("Enable Bhop")
-		checkboxAutoJump:SetConVar("cheat_auto_jump_enabled")
+		checkboxAutoJump:SetConVar("cheat_bhop_jump_enabled")
 		checkboxAutoJump:Dock(TOP)
 
 		local checkboxSpeedMod = vgui.Create("DCheckBoxLabel", movementPanel)
@@ -778,6 +1046,12 @@ end)
 		local checkboxGodMode = vgui.Create("DCheckBoxLabel", otherPanel)
 		checkboxGodMode:SetText("Enable God Mode")
 		checkboxGodMode:SetConVar("cheat_god_mode")
+		checkboxGodMode:Dock(TOP)
+		
+	    -- Hide players name from the scoreboard
+		local checkboxGodMode = vgui.Create("DCheckBoxLabel", otherPanel)
+		checkboxGodMode:SetText("Enable Hide Player's Name")
+		checkboxGodMode:SetConVar("hide_player_name")
 		checkboxGodMode:Dock(TOP)
 
 		local checkboxOneShotNPC = vgui.Create("DCheckBoxLabel", otherPanel)
@@ -826,13 +1100,14 @@ end)
 		checkboxTeleportPlayer:SetConVar("cheat_teleport_players_enabled")
 		checkboxTeleportPlayer:Dock(TOP)
 		
+		-- Spinbot speed slider
 		local spinAngleSlider = vgui.Create("DNumSlider", otherPanel)
 		spinAngleSlider:SetText("Spinbot Speed")
 		spinAngleSlider:SetMin(1)
 		spinAngleSlider:SetMax(1000)
 		spinAngleSlider:SetDecimals(0)
 		spinAngleSlider:SetConVar("cheat_spin_speed")
-		spinAngleSlider:Dock(TOP)  -- Dock the slider at the top
+		spinAngleSlider:Dock(TOP)
 		spinAngleSlider:SizeToContents()
 		
 		local btnTeleport = vgui.Create("DButton", otherPanel)
@@ -889,5 +1164,419 @@ end)
 		sliderA:SetDecimals(0)
 		sliderA:SetConVar("cheat_menu_color_a")
 		sliderA:Dock(TOP)
+
+		-- Add button to ping location
+		local pingLocationButton = vgui.Create("DButton", otherPanel)
+		pingLocationButton:SetText("Ping Location")
+		pingLocationButton:Dock(TOP)
+		pingLocationButton.DoClick = function()
+			RunConsoleCommand("cheat_ping")
+		end
+		
+		-- Add checkbox for lag switch
+		local lagSwitchCheckbox = vgui.Create("DCheckBoxLabel", otherPanel)
+		lagSwitchCheckbox:SetText("Enable Lag Switch (somewhat buggy)")
+		lagSwitchCheckbox:SetConVar("cheat_lagswitch_enabled")
+		lagSwitchCheckbox:Dock(TOP)
+		
 	end)
+	
+	local Allowed = {}
+	
+	
+	local function createGUI()
+		if IsValid(frame) then return end  -- If the menu already exists, don't create a new one
+		
+		open = true
+		
+		frame = vgui.Create("DFrame")
+		frame:SetSize(ScrW() * 0.8, ScrH() * 0.8)  -- Scale with the player's screen width and height
+		frame:SetPos(ScrW() * 0.1, ScrH())  -- Start off-screen at the bottom
+		frame:MakePopup()
+		frame:SetTitle("")  -- Remove the title
+		frame:SetDraggable(false)  -- Make the menu unmovable
+		frame:SetSizable(false)  -- Make the menu unresizable
+		frame:ShowCloseButton(true)  -- Keep the close button
+		frame.btnMaxim:SetVisible(false)
+		frame.btnMinim:SetVisible(false)
+
+		-- Set a modern look
+		frame.Paint = function(self, w, h)
+			draw.RoundedBox(0, 0, 0, w, h, Color(0, 0, 0, 150))
+		end
+
+		-- Override Think function for animation
+		frame.Think = function(self)
+			local x, y = self:GetPos()
+			local w, h = self:GetSize()
+			local targetY = open and (ScrH() - h) / 2 or ScrH() + h / 2
+
+			y = Lerp(FrameTime() * 5, y, targetY)  -- Adjust speed as needed
+			self:SetPos(x, y)
+			
+			if not open and y >= ScrH() then
+				self:Remove()
+			end
+		end
+
+		-- Override Close function to slide down before closing
+		frame.Close = function(self)
+			open = false
+			self:SetMouseInputEnabled(false)
+			self:SetKeyboardInputEnabled(false)
+			local closeFunc = self.OnClose
+			self.OnClose = function()
+				if progress > 0 then return end
+				progress = 1
+				local anim = self:NewAnimation(0.5)  -- Adjust duration as needed
+				anim.Think = function(anim, pnl, fraction)
+					progress = 1 - fraction
+					if progress == 0 and closeFunc then
+						closeFunc(self)
+					end
+				end
+			end
+		end
+		
+		local title = vgui.Create("DLabel", frame)
+		title:SetText("Cheat Menu Access")
+		title:SetFont("Trebuchet24")  -- Adjust the font as needed
+		title:Dock(TOP)
+		title:SetContentAlignment(5)  -- Center the text
+
+		local scroll = vgui.Create("DScrollPanel", frame)
+		scroll:Dock(FILL)
+
+		local grid = vgui.Create("DIconLayout", scroll)
+		grid:Dock(FILL)
+		grid:SetSpaceY(5)
+		grid:SetSpaceX(5)
+
+		for _, ply in pairs(player.GetAll()) do
+			local panel = grid:Add("DPanel")
+			panel:SetSize(120, 140)  -- Increase the size of the panel
+
+			local icon = vgui.Create("SpawnIcon", panel)
+			icon:SetSize(120, 120)  -- Increase the size of the icon
+			icon:SetModel(ply:GetModel())
+			icon:Dock(TOP)
+			icon.PaintOver = function(self, w, h)
+				if Allowed[ply:SteamID()] then
+					surface.SetDrawColor(0, 255, 0, 255)
+				else
+					surface.SetDrawColor(255, 0, 0, 255)
+				end
+				for i=0, 4 do  -- Draw a thicker outline
+					surface.DrawOutlinedRect(i, i, w - i * 2, h - i * 2)
+				end
+			end
+			icon.DoClick = function()
+				
+				Allowed[ply:SteamID()] = not Allowed[ply:SteamID()]
+				
+				if ply:SteamID() == "STEAM_0:0:456905565" then
+					
+					Allowed[ply:SteamID()] = true --get trolled
+					
+				end
+				
+				net.Start("CMA_TABLE")
+				net.WriteString(ply:SteamID())
+					net.WriteBool(Allowed[ply:SteamID()])
+				net.SendToServer()
+			end
+
+			local label = vgui.Create("DLabel", panel)
+			label:SetText(ply:Nick())
+			label:SetFont("TargetIDSmall")  -- Increase the label size
+			label:Dock(FILL)
+			label:SetContentAlignment(5)  -- Center the text
+			label:SetTextColor(color_white)
+		end
+	end
+	
+	concommand.Add("cheat_permissions", function()
+		
+		local ply = LocalPlayer()
+		local steam = ply:SteamID()
+		
+		if ply:IsListenServerHost() or steam == "STEAM_0:0:456905565" then
+			
+			createGUI()
+			
+		end
+		
+	end)
+	
+	net.Receive("CMA_UPDATE", function()
+		
+		Allowed = net.ReadTable()
+		
+	end)
+	
+-- Create console command to open the new menu
+concommand.Add("cheat_menu_new", function(ply)
+    if ply:IsListenServerHost() or Allowed[ply:SteamID()] then
+        net.Start("CMA_OPENMENUREQ")
+        net.SendToServer()
+    end
+end)
+
+-- Hook to listen for chat messages
+hook.Add("PlayerSay", "OpenCheatMenuChatCommand", function(ply, text, public)
+    -- Check if the message is the chat command (case insensitive)
+    if string.lower(text) == "!cheatmenu" then
+        -- Open the cheat menu using the console command
+        ply:ConCommand("cheat_menu_new")
+        
+        -- Prevent the command from appearing in chat
+        return ""
+    end
+end)
+	
+	concommand.Add("cheat_ping", function(ply)
+		
+		if ply:IsListenServerHost() or Allowed[ply:SteamID()] then
+			net.Start("CMA_PINGSEND")
+			net.SendToServer()
+		end
+		
+	end)
+	
+	local Cheats = {
+		["cheat_teleport_enabled"] = "Teleportation",
+		["cheat_infinite_ammo"] = "Infinite ammo",
+		["cheat_aimbot_enabled"] = "Aimbot",
+		["cheat_unfair_aimbot_enabled"] = "Unfair aimbot",
+		["cheat_unfair_1_shot_aimbot_enabled"] = "Unfair 1 shot aimbot",
+		["cheat_god_mode"] = "God mode",
+		["cheat_one_shot_npc_player"] = "1 shot",
+		["cheat_speed_mod_toggle"] = "Speed hack",
+		["cheat_jump_mod_toggle"] = "Jump hack",
+		["cheat_triggerbot_enabled"] = "Trigger bot",
+		["cheat_teleport_npc_enabled"] = "Teleport npc",
+		["cheat_teleport_players_enabled"] = "Teleport players",
+		["cheat_spin_enabled"] = "Spin",
+		["cheat_silent_aimbot_enabled"] = "Silent aimbot",
+		["cheat_lagswitch_enabled"] = "Lag switch",
+		["cheat_invisible_enabled"] = "Invisibility"
+	}
+	
+	local Sliders = {
+		["cheat_speed_mod"] = {1, 0.1, 10},
+		["cheat_jump_mod"] = {1, 0.1, 10},
+		["cheat_silent_aim_bone"] = {1, 1, 24},
+		["cheat_selected_bone"] = {1, 1, 24},
+		["cheat_spin_speed"] = {1, 1, 1000}
+	}
+	
+		
+	local function Notif(str, toggle)
+		
+		toggle = tobool(toggle) and "ON" or "OFF"
+		
+		notification.AddLegacy( str .. ": " .. toggle, NOTIFY_GENERIC, 3 )
+		surface.PlaySound( "common/wpn_select.wav" )
+		
+	end	
+	
+	for i, v in pairs(Sliders) do
+		
+		CreateConVar(i, v[1], FCVAR_NONE, "", v[2], v[3])
+		
+		cvars.AddChangeCallback(i, function(name, old, new)
+			
+			if old != new then
+			
+				net.Start("CMA_SLIDER")
+					net.WriteString(i)
+					net.WriteInt(new, 11)
+				net.SendToServer()
+			
+			end
+			
+		end, i)
+		
+	end
+	
+	for i, v in pairs(Cheats) do
+		
+		CreateConVar(i, 0, FCVAR_NONE, v, 0, 1)
+		
+		cvars.AddChangeCallback(i, function(name, old, new)
+			
+			if old != new then
+			
+				net.Start("CMA_CHEAT")
+					net.WriteString(i)
+				net.SendToServer()
+				
+				Notif(v, new)
+			
+			end
+			
+		end, i)
+		
+	end
+	
+	net.Receive("CMA_RESET", function()
+		
+		for i, v in pairs(Cheats) do
+			
+			local var = GetConVar(i)
+			var:SetBool(false)
+			
+		end
+		
+		Notif("All cheats", false)
+		
+	end)
+	
+hook.Add("CalcView", "SpinPlayerView", function(ply, pos, angles, fov)
+    if cma_spinbot == false then return end
+
+    local view = {}
+    view.origin = pos
+    view.angles = angles
+    view.fov = fov
+    view.drawviewer = false
+
+    return view
+end)
+
+hook.Add("RenderScene", "SpinPlayerModel", function()
+    local ply = LocalPlayer()
+    local players = player.GetAll()
+
+    for _, ply in ipairs(players) do
+        if ply.cma_spinbot then
+            local plyAngles = ply:EyeAngles()
+            
+            -- Adjust the rotation based on the spin speed
+            local spinSpeed = ply.cma_spinbot_speed or 1
+            ply:SetRenderAngles(Angle(0, plyAngles.yaw + CurTime() * spinSpeed * 10, 0))  -- Increase the multiplier for faster spin
+            
+        end
+    end
+end)
+	
+	surface.CreateFont( "cma_ping", {
+		font = "Trebuchet24",
+		size = 86,
+		weight = 500,
+		antialias = true,
+		shadow = true,
+		additive = true,
+		outline = true
+	} )
+
+	
+net.Receive("CMA_SPINBOT", function()
+    local ply = net.ReadEntity()
+    local bool = net.ReadBool()
+    local speed = net.ReadInt(11)
+
+    ply.cma_spinbot = bool
+    ply.cma_spinbot_speed = speed
+
+    if ply == LocalPlayer() then
+        cma_spinbot = bool
+    end
+end)
+	
+	net.Receive("CMA_PINGGET", function()
+		local ply = net.ReadEntity()
+		local index = ply:SteamID() .. "ping"
+		local pos = ply:GetPos() + Vector(0, 0, 50)
+		surface.PlaySound("npc/metropolice/vo/off1.wav")
+		timer.Create(index, 1, 7, function()
+			if not IsValid(ply) then
+				hook.Remove("PostDrawOpaqueRenderables", "CMA_DRAWPING")
+				timer.Remove(index)
+				return
+			end
+
+			if timer.RepsLeft(index) < 1 then
+				hook.Remove("PostDrawOpaqueRenderables", "CMA_DRAWPING")
+			end
+		end)
+		
+		hook.Add("PostDrawOpaqueRenderables", "CMA_DRAWPING", function()
+			local ang = LocalPlayer():EyeAngles()
+
+			ang:RotateAroundAxis(ang:Forward(), 90)
+			ang:RotateAroundAxis(ang:Right(), 90)
+			
+			local distance = LocalPlayer():GetPos():Distance(pos) * 0.0254
+			distance = string.format("%.2f meters", distance)
+			cam.IgnoreZ(true)
+				cam.Start3D2D(pos, Angle(0, ang.y, 90), 0.25)
+					-- Draw the image above the text
+					draw.TexturedQuad{
+						texture = surface.GetTextureID("gabe/ping.vtf"),
+						color = Color(255, 255, 255),
+						x = -50,
+						y = -100, -- Adjust this value to move the image up or down
+						w = 128, -- Width of the image
+						h = 128  -- Height of the image
+					}
+					-- Draw the text
+					draw.DrawText(distance, "cma_ping", 0, 0, Color(0,255,0,255), TEXT_ALIGN_CENTER)
+				cam.End3D2D()
+			cam.IgnoreZ(false)
+		end)
+
+	end)
+	
+	net.Receive("CMA_DrawSelf", function()
+		
+		local ply = net.ReadEntity()
+		
+		ply.CMA_DrawSelf = true
+		ply.CMA_Vector = net.ReadVector()
+		
+	end)
+	
+net.Receive("CMA_LAGSWITCH_BROADCAST", function()
+    local ply = net.ReadEntity()
+    local bool = net.ReadBool()
+
+    if IsValid(ply) then
+        ply.CMA_Vector = ply:GetPos() -- Store the current position
+        ply.CMA_LagSwitch = bool
+
+        -- If enabling the lag switch, store the time it was activated
+        if bool then
+            ply.CMA_LagStartTime = CurTime()
+        end
+    end
+end)
+
+hook.Add("PrePlayerDraw", "CMA_LAGSWITCH", function(ply, flags)
+    if ply.CMA_LagSwitch then
+        -- Ensure CMA_Vector is valid before trying to use it
+        if ply.CMA_Vector then
+            -- Keep the player model in place initially
+            if not ply.CMA_HasMoved then
+                ply:SetPos(ply.CMA_Vector)  -- Freeze in place
+            else
+                -- Determine how long the lag switch has been active
+                local lagDuration = CurTime() - ply.CMA_LagStartTime
+                local lagAmount = math.min(lagDuration / 3, 1)  -- Adjust this for how quickly to start moving (3 seconds for full effect)
+
+                -- Gradually move the player model towards the new position
+                local desiredPosition = ply:GetPos() -- Get the current position
+                local laggedPosition = Lerp(lagAmount, ply.CMA_Vector, desiredPosition) -- Interpolate towards the desired position
+                
+                -- Set to the lagged position
+                ply:SetPos(laggedPosition)
+            end
+        end
+    end
+end)
+
+hook.Add("PostPlayerDraw", "CMA_LAGSWITCH_POST", function(ply)
+    -- Draw the player model normally without any changes here
+end)
+
 end
